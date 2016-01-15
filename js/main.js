@@ -29,7 +29,7 @@ requirejs.config({
         {
 		    name: "extenders",
 		    location: "extenders"
-        }        
+        }
 	],
 	shim: {
 		"colorbrewer": {
@@ -419,10 +419,10 @@ requirejs(['bootstrap'], function () { // bootstrap must come first
 			pageModel.resolveConceptSetExpression();
 			pageModel.analyzeSelectedConcepts();
 		});
-		
+
 		$(window).bind('beforeunload', function () {
 			if (pageModel.hasUnsavedChanges())
 				return "Changes will be lost if you do not save.";
-		});		
+		});
 	});
 });
