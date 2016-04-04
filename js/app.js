@@ -4,27 +4,28 @@ define([
 	'jnj_chart',
 	'd3',
     'ohdsi.util',
+    'webapi/EvidenceAPI',
 	'facets',
 	'knockout-persist',
 	'css!styles/tabs.css',
 	'css!styles/buttons.css',
-], function ($, ko, jnj_chart, d3, ohdsiUtil) {
+], function ($, ko, jnj_chart, d3, ohdsiUtil, evidenceAPI) {
     var appModel = function () {
         $.support.cors = true;
         var self = this;
 
         self.services = ko.observableArray([
-			/*
 			{
 				name: 'Local',
 				url: 'http://localhost:8080/WebAPI/'
 			}
+			/*
             ,
-			*/
             {
                 name: 'HixBeta Multihomed',
                 url: 'http://hixbeta.jnj.com:8999/WebAPI/'
 			}
+			*/
 		]);
 
         $('#querytext').focus();
@@ -1339,7 +1340,7 @@ define([
                             var resolvingPromise = self.resolveConceptSetExpression();
                             $.when(resolvingPromise).done(function () {
                                 self.currentConceptSetMode(mode);
-                                $('#conceptSetLoadDialog').modal('hide');
+                                $('#conceptSetLoadDialog').modal('hide');                                
                             });
                         }
                     });
@@ -1506,6 +1507,7 @@ define([
         self.currentConceptIdentifierList = ko.observable();
         self.currentConceptSet = ko.observable();
         self.currentConceptSetSource = ko.observable('repository');
+        self.currentConceptSetPredictiveProbabilities = ko.observable();
         self.currentIncludedConceptIdentifierList = ko.observable();
         self.searchResultsConcepts = ko.observableArray();
         self.relatedConcepts = ko.observableArray();

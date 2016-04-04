@@ -25,6 +25,9 @@
 			<li role="presentation" data-bind="click: function() {$component.routeTo('sourcecodes');}, attr: {class: model.currentConceptSetMode() == 'sourcecodes' ? 'active' : ''}">
 				<a>Included Source Codes</a>
 			</li>
+			<li role="presentation" data-bind="click: function() {$component.routeTo('predictive');}, attr: {class: model.currentConceptSetMode() == 'predictive' ? 'active' : ''}">
+				<a>Predictive Probablities</a>
+			</li>
 			<li role="presentation" data-bind="click: function() {$component.routeTo('export');}, attr: {class: model.currentConceptSetMode() == 'export' ? 'active' : ''}"><a>Export</a>
 			</li>
 		</ul>
@@ -111,6 +114,10 @@
 		</div>
 	</div>
 
+    <div data-bind="if: model.currentConceptSetMode() == 'predictive'">
+        <predictive-probabilities params="{model: pageModel, selectedConcepts: model.selectedConcepts, conceptSet: model.currentConceptSet, conceptIds: model.conceptSetInclusionIdentifiers, services: model.services, defaultResultsUrl: model.resultsUrl}"></predictive-probabilities>
+    </div>
+    
 	<div id="wrapperConceptSetExport" data-bind="if: model.currentConceptSetMode() == 'export'">
 		<div class="heading">Concept Set Expression JSON</div>
 		<pre data-bind="html: model.currentConceptSetExpressionJson, selectOnFocus: {events: ['click']}"></pre>

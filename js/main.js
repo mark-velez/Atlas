@@ -79,6 +79,7 @@ requirejs.config({
 		"profile-manager": "components/profile-manager",
 		"r-manager": "components/r-manager",
 		"studyreport-manager": "components/studyreport-manager",
+        "predictive-probabilities": "components/predictive-probabilities",
 		"d3": "d3.min",
 		"d3_tip": "d3.tip",
 		"jnj_chart": "jnj.chart",
