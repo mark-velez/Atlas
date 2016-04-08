@@ -25,8 +25,8 @@
 			<li role="presentation" data-bind="click: function() {$component.routeTo('sourcecodes');}, attr: {class: model.currentConceptSetMode() == 'sourcecodes' ? 'active' : ''}">
 				<a>Included Source Codes</a>
 			</li>
-			<li role="presentation" data-bind="click: function() {$component.routeTo('predictive');}, attr: {class: model.currentConceptSetMode() == 'predictive' ? 'active' : ''}">
-				<a>Predictive Probablities</a>
+			<li role="presentation" data-bind="click: function() {$component.routeTo('negcontrols');}, attr: {class: model.currentConceptSetMode() == 'negcontrols' ? 'active' : ''}">
+				<a>Negative Controls</a>
 			</li>
 			<li role="presentation" data-bind="click: function() {$component.routeTo('export');}, attr: {class: model.currentConceptSetMode() == 'export' ? 'active' : ''}"><a>Export</a>
 			</li>
@@ -114,8 +114,8 @@
 		</div>
 	</div>
 
-    <div data-bind="if: model.currentConceptSetMode() == 'predictive'">
-        <predictive-probabilities params="{model: pageModel, selectedConcepts: model.selectedConcepts, conceptSet: model.currentConceptSet, conceptIds: model.conceptSetInclusionIdentifiers, services: model.services, defaultResultsUrl: model.resultsUrl}"></predictive-probabilities>
+    <div data-bind="if: model.currentConceptSetMode() == 'negcontrols'">
+        <predictive-probabilities params="{model: pageModel, predictiveProbabilities: model.currentConceptSetPredictiveProbabilities, selectedConcepts: model.selectedConcepts, conceptSet: model.currentConceptSet, conceptIds: model.conceptSetInclusionIdentifiers, services: model.services, defaultResultsUrl: model.resultsUrl}"></predictive-probabilities>
     </div>
     
 	<div id="wrapperConceptSetExport" data-bind="if: model.currentConceptSetMode() == 'export'">
