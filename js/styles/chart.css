@@ -87,9 +87,9 @@ table.boxplotValues tr td
 }
 .axis text {
 	font-family: arial;
-	font-size: 6px;
+	font-size: 10px;
 }
-.axislabel {
+.axislabel, .axislabel text {
 	font-family: arial;
 }
 table.data td:first-child {
@@ -188,4 +188,35 @@ table.data td {
 	margin: -4px 0 0 -1px;
 	top: 50%;
 	left: 100%;
+}
+
+
+
+/* zoomScatter, inset */
+
+.zoom-scatter .dot {
+	opacity: 0.8;
+	stroke-width: .4;
+	fill: white;
+}
+.zoom-scatter .dot.inset {
+	opacity: 0.7;
+}
+.zoom-scatter .dot.inset.out-of-zoom {
+	opacity: 0.1;
+}
+.zoom-scatter rect.inset-border {
+	fill: white;
+	stroke: black;
+	stroke-width: 0.3;
+}
+.zoom-scatter rect.inset-focus {
+	stroke: #f19119;
+	fill-opacity: 0;
+	stroke-width: 0.3;
+}
+
+.zoom-scatter .refline {
+	stroke:#003142;
+	stroke-width: 0.3;
 }

@@ -16,23 +16,41 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 		return xScale(x) - xScale(0);
 	}
 	var yScale = d3.scale.ordinal();
+	// these are hardcoded now, but should be parameters to make this chart more reusable
 	var x = d=>{
 		if (!d) debugger;
 		//return d.startDate;
 		return d.startDay;
 	};
-	// these are hardcoded now, but should be parameters to make this chart more reusable
 	var endX = d => d.endDay;
 	var y = d=>d.domain;
 	var tipText = d=>d.conceptName;
 	var pointClass = d=>d.domain;
 	var radius = d=>2;
+	var labelX = (d, zoomFilter) => {
+		var ext = zoomFilter() && zoomFilter().ext() || [x(d), endX(d)];
+		var mid = (x(d) + endX(d)) / 2;
+		if (mid < ext[0] || mid > ext[1]) {
+			return (d3.scale.linear()
+								.domain([x(d), endX(d)])
+								.range(ext)
+								(mid));
+		}
+		return mid;
+	}
 
 	var highlightFunc = ()=>{};
 	var highlightFunc2 = ()=>{};
+	var zoomFilterG;
 	var focusTip = d3.tip()
 		.attr('class', 'd3-tip')
-		.offset([-10, 0])
+		.offset(function(d) {
+			return [this.getBBox().height / 2, 0];
+			return [-10,0];
+			var offset = [0, labelX(d, zoomFilterG) - x(d)];
+			console.log(offset)
+			return offset;
+		})
 		.html(function (d) {
 			return tipText(d);
 		});
@@ -55,7 +73,9 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 				return;
 			var svg = categoryScatterPlot(element, va.recs(), 
 													rectangle,
-												 null, va.zoomFilter);
+													ko.utils.unwrapObservable(va.verticalLines||[]), 
+													ko.utils.unwrapObservable(va.shadedRegions||[]), 
+													va.zoomFilter);
 			if (va.allRecs.length != va.recs().length)
 				inset(svg, va.allRecs, va.recs(), va.zoomFilter);
 		}
@@ -63,15 +83,17 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 	function categoryScatterPlot(element, points, 
 															pointFunc,
 															verticalLines, 
+															shadedRegions, 
 															zoomFilter
 															) {
 		/* verticleLines: [{xpos, color},...] */
 
 		if (zoomFilter()) {
-			xScale.domain(zoomFilter());
+			xScale.domain(zoomFilter().ext());
 		} else {
 			xScale.domain([d3.min(points.map(x)) - 1, d3.max(points.map(endX)) + 1]);
 		}
+		zoomFilterG = zoomFilter;
 
 		var categories = _.chain(points).map(y).uniq().value();
 		yScale.domain(categories.sort())
@@ -122,7 +144,7 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 				if (brush.empty()) {
 					zoomFilter(null);
 				} else {
-					zoomFilter(brush.extent());
+					zoomFilter(makeFilter(brush.extent()));
 				}
 			});
 
@@ -159,12 +181,41 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 						return ls + 'em';
 					});
 
+		//console.log(shadedRegions);
+		var regions = focus.selectAll('rect.shaded-region')
+									.data(shadedRegions);
+		regions.exit().remove();
+		regions.enter()
+					.append('rect')
+					.attr('class', function(sr) {
+						return sr.className;
+					})
+					.classed('shaded-region', true);
+		focus.selectAll('rect.shaded-region')
+			.attr('x',d=>xScale(d.x1))
+			.attr('y', yScale.rangeExtent()[0])
+			.attr('width',d => xScale(d.x2) - xScale(d.x1))
+			.attr('height', yScale.rangeExtent()[1])
+
 		focus.append("g")
 			.attr("class", "x brush")
 			.call(brush)
 			.selectAll("rect")
 			.attr("y", margin.top)
 			.attr("height", vizHeight);
+
+		var vLines = focus.selectAll('line.vertical')
+									.data(verticalLines);
+		vLines.exit().remove();
+		vLines.enter()
+					.append('line')
+					.attr('class','vertical');
+		focus.selectAll('line.vertical')
+			.attr('x1',d=>xScale(d.x))
+			.attr('x2',d=>xScale(d.x))
+			.attr('y1', yScale.rangeExtent()[0])
+			.attr('y2', yScale.rangeExtent()[1])
+			.style('stroke', d=>d.color);
 
 		var pointGs = focus.selectAll("g.point")
 			.data(points);
@@ -214,7 +265,7 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 		if (points.length <= 50) {
 			// labeler usage from https://github.com/tinker10/D3-Labeler demo
 			var label_array = points.map((d,i)=>{
-				d.x = xScale(x(d)) + jitter(i).x;
+				d.x = xScale(labelX(d, zoomFilter)) + jitter(i).x;
 				d.y = yScale(y(d)) + jitter(i).y;
 				d.r = 8;
 				return {
@@ -325,8 +376,8 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 						.attr('transform', d => _.find(recs,d) ? 'translate(-1,-1)' : null)
 		}
 		if (zoomFilter()) {
-			var zoomDays = zoomFilter()[1] - zoomFilter()[0];
-			var edges = [{x: ixScale(zoomFilter()[0]), 
+			var zoomDays = zoomFilter().ext()[1] - zoomFilter().ext()[0];
+			var edges = [{x: ixScale(zoomFilter().ext()[0]), 
 										width: ixScale(zoomDays) - ixScale(0)}];
 
 			var insetZoom = g
@@ -343,13 +394,19 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 			insetZoom.call(drag);
 			drag.on('drag', function(d) {
 				d.x += d3.event.dx;
+				var newX = d.x + d3.event.dx;
+				if (newX < ixScale.range()[0] - 10)
+					newX = ixScale.range()[0] - 10;
+				if (newX > ixScale.range()[1] - edges[0].width + 10)
+					newX = ixScale.range()[1] - edges[0].width + 10;
+				d.x = newX;
 				insetZoom.attr('x', d.x)
 				//.style('cursor', '-webkit-grabbing') doesn't work
 			});
 			drag.on('dragend', function(d) {
 				var x = ixScale.invert(d.x);
 				//insetZoom.style('cursor', '-webkit-grab')
-				zoomFilter([x, x + zoomDays]);
+				zoomFilter(makeFilter([x, x + zoomDays]));
 			});
 
 			var resizeLeft = g
@@ -374,7 +431,7 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 			resizeLeftDrag.on('dragend', function(d) {
 				var x = ixScale.invert(d.x);
 				//insetZoom.style('cursor', '-webkit-grab')
-				zoomFilter([x, zoomFilter()[1]]);
+				zoomFilter(makeFilter([x, zoomFilter().ext()[1]]));
 			});
 
 			var resizeRight = g
@@ -396,7 +453,7 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 			});
 			resizeRightDrag.on('dragend', function(d) {
 				var width = ixScale.invert(d.width) - ixScale.invert(0);
-				zoomFilter([zoomFilter()[0], zoomFilter()[0] + width]);
+				zoomFilter(makeFilter([zoomFilter().ext()[0], zoomFilter().ext()[0] + width]));
 			});
 		}
 	}
@@ -411,7 +468,7 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 			.attr('r', radius(datum))
 	}
 	function rectangle(datum) {
-		var minBoxPix = 4;
+		var minBoxPix = 5;
 		var g = d3.select(this);
 		g.selectAll('rect.point.' + pointClass(datum))
 			.data([datum])
@@ -475,5 +532,16 @@ define(['knockout','d3', 'lodash', 'D3-Labeler/labeler'], function (ko, d3, _) {
 		jitterYScale.range([yScale.rangeBand() * .1, yScale.rangeBand() * .9]);
 		jitterOffsets[i] = jitterOffsets[i] || [Math.random() - .5, Math.random() - .5];
 		return { x: jitterOffsets[i][0] * maxX, y: jitterYScale(jitterOffsets[i][1]) };
+	}
+	function makeFilter(ext) {
+		var filter = function([start, end] = []) {
+			return (
+							( start >= ext[0] && start <= ext[1] ) ||
+							( end >= ext[0] && end <= ext[1] ) ||
+							( start <= ext[0] && end >= ext[1] )
+						 );
+		};
+		filter.ext = () => ext;
+		return filter;
 	}
 });

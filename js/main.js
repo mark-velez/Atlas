@@ -1,4 +1,5 @@
 requirejs.config({
+	//waitSeconds: 60, // FOR DEVELOPMENT, REMOVE WHEN NOT NEEDED? default is 7
 	//urlArgs: "bust=" + (new Date()).getTime(),
 	baseUrl: 'js',
 	config: {
@@ -20,7 +21,15 @@ requirejs.config({
 		{
 			name: "circe",
 			location: "modules/circe"
-    }
+    	},
+		{
+			name: "iranalysis",
+			location: "modules/iranalysis"
+        },
+        {
+		    name: "extenders",
+		    location: "extenders"
+        }        
 	],
 	shim: {
 		"colorbrewer": {
@@ -79,22 +88,26 @@ requirejs.config({
 		"cohort-definition-manager": "components/cohort-definition-manager",
 		"cohort-definition-browser": "components/cohort-definition-browser",
 		"cohort-comparison-browser": "components/cohort-comparison-browser",
-        "cohort-comparison-print-friendly": "components/cohort-comparison-print-friendly",
-        "cohort-comparison-r-code": "components/cohort-comparison-r-code",
+		"cohort-comparison-print-friendly": "components/cohort-comparison-print-friendly",
+		"cohort-comparison-r-code": "components/cohort-comparison-r-code",
 		"feasibility-manager": "components/feasibility-manager",
 		"feasibility-browser": "components/feasibility-browser",
 		"feasibility-analyzer": "components/feasibility-analyzer",
 		"report-manager": "components/report-manager",
+		"ir-manager": "components/ir-manager",
+        "ir-browser": "components/ir-browser",
 		"faceted-datatable": "components/faceted-datatable",
 		"profile-manager": "components/profile-manager",
 		"explore-cohort": "components/explore-cohort",
 		"cohortcomparison": "modules/cohortcomparison",
 		"r-manager": "components/r-manager",
+        "negative-controls": "components/negative-controls",
 		"d3": "d3.min",
 		"d3_tip": "d3.tip",
 		"jnj_chart": "jnj.chart",
 		"nvd3":"nv.d3",
-		"lodash": "lodash.min",
+		//"lodash": "lodash.min",
+		"lodash": "lodash.4.15.0.full",
 		"lscache": "lscache.min",
 		"localStorageExtender": "localStorageExtender",
 		"cohortbuilder": "modules/cohortbuilder",
@@ -104,19 +117,20 @@ requirejs.config({
 		"vocabularyprovider": "modules/WebAPIProvider/VocabularyProvider",
 		"appConfig": "config",
 		"home" : "components/home",
-		"lodash": "lodash.min",
 		"common":"components/datasources/app/common",
 		"reports": "components/datasources/app/reports",
-        "prism": "prism"
+		"prism": "prism",
+		"sptest": "sptest/sptest",
+		"sptest_smoking": "sptest/sptest_smoking",
 	}
 });
 
 requirejs(['bootstrap'], function () { // bootstrap must come first
-	requirejs(['knockout', 'app', 'appConfig', 'director', 'search', 'localStorageExtender', 'jquery.ui.autocomplete.scroll'], function (ko, app, config) {
+	requirejs(['knockout', 'app', 'appConfig', 'ohdsi.util', 'director', 'search', 'localStorageExtender', 'jquery.ui.autocomplete.scroll'], function (ko, app, config, util) {
 		$('#splash').fadeIn();
 		var pageModel = new app();
 		window.pageModel = pageModel;
-		ko.applyBindings(pageModel);
+		ko.applyBindings(pageModel,document.getElementsByTagName('html')[0]);
 
 		// establish base priorities for daimons
 		var evidencePriority = 0;
@@ -129,7 +143,7 @@ requirejs(['bootstrap'], function () { // bootstrap must come first
 			var servicePromise = $.Deferred();
 			pageModel.initPromises.push(servicePromise);
 
-			$.ajax({
+			util.cachedAjax({
 				url: service.url + 'source/sources',
 				method: 'GET',
 				contentType: 'application/json',
@@ -190,7 +204,7 @@ requirejs(['bootstrap'], function () { // bootstrap must come first
 						service.sources.push(source);
 
 						if (source.hasVocabulary) {
-							$.ajax({
+							util.cachedAjax({
 								url: service.url + source.sourceKey + '/vocabulary/info',
 								timeout: 20000,
 								method: 'GET',
@@ -407,8 +421,7 @@ requirejs(['bootstrap'], function () { // bootstrap must come first
 		});
 		
 		$(window).bind('beforeunload', function () {
-			if ((pageModel.currentCohortDefinitionDirtyFlag() && pageModel.currentCohortDefinitionDirtyFlag().isDirty())  || 
-					(pageModel.currentConceptSetDirtyFlag && pageModel.currentConceptSetDirtyFlag.isDirty()))
+			if (pageModel.hasUnsavedChanges())
 				return "Changes will be lost if you do not save.";
 		});		
 	});

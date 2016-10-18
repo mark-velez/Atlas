@@ -2,13 +2,14 @@ define(['knockout',
 				'text!./atlas.cohort-editor.html',
 				'appConfig',
 				'cohortbuilder/CohortDefinition',
-                'conceptsetbuilder/InputTypes/ConceptSet',
+				'conceptsetbuilder/InputTypes/ConceptSet',
+				'ohdsi.util',
 				'cohortbuilder/components',
 				'conceptsetbuilder/components',
 				'knockout-jqueryui/tabs',
 				'cohortdefinitionviewer',
                 'circe',
-				'databindings'
+				'databindings',
 ], function (ko, view, config, CohortDefinition, ConceptSet) {
 
 	function cohortEditor(params) {
@@ -57,9 +58,9 @@ define(['knockout',
 				    })) + 1 : 0;
 				    cohortConceptSets.push(newConceptSet);
 				    self.model.loadConceptSet(newConceptSet.id, 'cohortdefinition', 'cohort', 'details');
-                    self.model.currentCohortDefinitionMode("conceptsets");
-                    self.model.criteriaContext().conceptSetId(newConceptSet.id);
-                }
+						self.model.currentCohortDefinitionMode("conceptsets");
+						self.model.criteriaContext().conceptSetId(newConceptSet.id);
+				}
 
 				self.model.criteriaContext(null);
 		}

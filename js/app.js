@@ -1,4 +1,4 @@
-define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'facets', 'knockout-persist', 'css!styles/tabs.css', 'css!styles/buttons.css', ], function ($, ko, jnj_chart, d3, ohdsiUtil, config) {
+define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'facets', 'knockout-persist', 'css!styles/tabs.css', 'css!styles/buttons.css'], function ($, ko, jnj_chart, d3, ohdsiUtil, config) {
 	var appModel = function () {
 		$.support.cors = true;
 		var self = this;
@@ -6,9 +6,50 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 		self.appInitializationFailed = ko.observable(false);
 		self.initPromises = [];
 		self.applicationStatus = ko.observable('initializing');
-		self.minibar = ko.observable(false);
 		self.searchTabMode = ko.observable('simple');
 		self.pendingSearch = ko.observable(false);
+		self.pageTitle = ko.pureComputed(function () {
+			var pageTitle = "ATLAS";
+			switch (self.currentView()){
+				case 'loading':
+					pageTitle = pageTitle + ": Loading";
+					break;
+				case 'home':
+					pageTitle = pageTitle + ": Home";
+					break;
+				case 'search':
+					pageTitle = pageTitle + ": Search";
+					break;
+				case 'conceptsets':
+				case 'conceptset':
+					pageTitle = pageTitle + ": Concept Sets";
+					break;
+				case 'concept':
+					pageTitle = pageTitle + ": Concept";
+					break;
+				case 'cohortdefinitions':
+				case 'cohortdefinition':
+					pageTitle = pageTitle + ": Cohorts";
+					break;
+				case 'irbrowser':
+				case 'iranalysis':
+					pageTitle = pageTitle + ": Incidence Rate";
+					break;
+				case 'estimations':
+				case 'estimation':
+					pageTitle = pageTitle + ": Estimation";
+					break;
+				case 'profiles':
+					pageTitle = pageTitle + ": Profiles";
+					break;
+			}
+				
+			if (self.hasUnsavedChanges()) {
+				pageTitle = "*" + pageTitle + " (unsaved)";
+			}
+			
+			return pageTitle;
+		});
 		self.initComplete = function () {
 			if (!self.appInitializationFailed()) {
 				var routerOptions = {
@@ -26,10 +67,24 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 							self.loadConcept(conceptId);
 						});
 					},
+					'/cohortdefinitions': function () {
+						require(['cohort-definitions', 'cohort-definition-manager', 'cohort-definition-browser'], function () {
+							self.currentView('cohortdefinitions');
+						});
+					},
+					'/cohortdefinition/:cohortDefinitionId:': function (cohortDefinitionId) {
+						require(['cohortbuilder/CohortDefinition', 'components/atlas.cohort-editor', 'cohort-definitions', 'cohort-definition-manager', 'cohort-definition-browser', 'conceptset-editor', 'report-manager', 'explore-cohort'], function (CohortDefinition) {
+							self.currentView('cohortdefinition');
+							self.currentCohortDefinitionMode('definition');
+							self.loadCohortDefinition(cohortDefinitionId, null, 'cohortdefinition', 'details');
+						});
+					},
 					'/cohortdefinition/:cohortDefinitionId/conceptset/:conceptSetId/:mode:': function (cohortDefinitionId, conceptSetId, mode) {
-						require(['report-manager', 'cohortbuilder/CohortDefinition', 'components/atlas.cohort-editor', 'cohort-definitions', 'cohort-definition-manager', 'cohort-definition-browser', 'conceptset-editor'], function (CohortDefinition) {
+						require(['report-manager', 'cohortbuilder/CohortDefinition', 'components/atlas.cohort-editor', 'cohort-definitions', 'cohort-definition-manager', 'cohort-definition-browser', 'conceptset-editor','explore-cohort'], function (CohortDefinition) {
 							self.currentView('cohortdefinition');
 							self.currentCohortDefinitionMode('conceptsets');
+							//if (!ohdsiUtil.hasState('cohortDefTab'))
+								//ohdsiUtil.setState('cohortDefTab', 'conceptsets');
 							self.loadCohortDefinition(cohortDefinitionId, conceptSetId, 'cohortdefinition', 'details');
 						});
 					},
@@ -43,13 +98,8 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 							self.currentView('datasources');
 						});
 					},
-					'/cohortdefinitions': function () {
-						require(['cohort-definitions', 'cohort-definition-manager', 'cohort-definition-browser'], function () {
-							self.currentView('cohortdefinitions');
-						});
-					},
 					'/configure': function () {
-						require(['configuration'], function () {
+						require(['configuration','r-manager'], function () {
 							self.currentView('configure');
 						});
 					},
@@ -75,9 +125,13 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 					},
 					'/profiles': function () {
 						require(['profile-manager', 'cohort-definition-browser'], function () {
+							var cohortDefinitionId = util.getState('currentCohortDefinitionId');
+							if (typeof cohortDefinitionId !== "undefined")
+								self.loadCohortDefinition(cohortDefinitionId, null, 'profiles');
 							self.currentView('profiles');
 						});
 					},
+					/*
 					'/profiles/:sourceKey': function (sourceKey) {
 						require(['profile-manager', 'cohort-definition-browser'], function () {
 							self.currentView('profiles');
@@ -92,8 +146,9 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 							self.loadCohortDefinition(cohortDefinitionId, null, 'profiles', 'details');
 						});
 					},
+					*/
 					'/conceptset/:conceptSetId/:mode': function (conceptSetId, mode) {
-						require(['conceptset-manager'], function () {
+						require(['conceptset-manager', 'cohort-definition-browser'], function () {
 							self.loadConceptSet(conceptSetId, 'conceptset', 'repository', mode);
 							self.resolveConceptSetExpression();
 						});
@@ -105,13 +160,6 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 					},
 					'/splash': function () {
 						self.currentView('splash');
-					},
-					'/cohortdefinition/:cohortDefinitionId:': function (cohortDefinitionId) {
-						require(['cohortbuilder/CohortDefinition', 'components/atlas.cohort-editor', 'cohort-definitions', 'cohort-definition-manager', 'cohort-definition-browser', 'conceptset-editor', 'report-manager', 'explore-cohort'], function (CohortDefinition) {
-							self.currentView('cohortdefinition');
-							self.currentCohortDefinitionMode('definition');
-							self.loadCohortDefinition(cohortDefinitionId, null, 'cohortdefinition', 'details');
-						});
 					},
 					'/search/:query:': function (query) {
 						require(['search'], function (search) {
@@ -137,11 +185,6 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 							self.feasibilityId(feasibilityId);
 						});
 					},
-					'/r': function () {
-						require(['r-manager'], function () {
-							self.currentView('r');
-						});
-					},
 					'/estimation': function () {
 						require(['cohort-comparison-browser'], function () {
 							self.currentView('estimations');
@@ -149,11 +192,40 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 					},
 					'/estimation/:cohortComparisonId:': function (cohortComparisonId) {
 						require(['cohort-comparison-manager', 'cohort-definition-browser', 'components/atlas.cohort-editor', 'cohort-comparison-print-friendly', 'cohort-comparison-r-code'], function () {
-							self.currentCohortComparisonId(cohortComparisonId)
+							self.currentCohortComparisonId(cohortComparisonId);
 							self.currentView('estimation');
 						});
-					}
-				}
+					},
+					'/iranalysis': function () {
+						require(['ir-browser'], function () {
+							self.currentView('irbrowser');
+						});
+					},
+          '/iranalysis/new': function(analysisId) {
+						require(['ir-manager'], function () {
+            	self.selectedIRAnalysisId(null);
+							self.currentView('iranalysis');
+						});
+					},
+          '/iranalysis/:analysisId': function(analysisId) {
+						require(['ir-manager'], function () {
+            	self.selectedIRAnalysisId(+analysisId);
+							self.currentView('iranalysis');
+						});
+					},
+					'/sptest': function () {
+						require(['sptest'], function () {
+							console.log("trying to load sptest");
+							self.currentView('sptest');
+						});
+					},
+					'/sptest_smoking': function () {
+						require(['sptest_smoking'], function () {
+							console.log("trying to load sptest_smoking");
+							self.currentView('sptest_smoking');
+						});
+					},
+        	};
 				self.router = new Router(routes).configure(routerOptions);
 				self.router.init('/');
 				self.applicationStatus('running');
@@ -168,7 +240,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 				$('#wrapperLeftMenu').fadeIn();
 				$('#wrapperMainWindow').fadeIn();
 			}, 10);
-		}
+		};
 		self.loadConcept = function (conceptId) {
 			self.currentView('loading');
 			var conceptPromise = $.ajax({
@@ -226,7 +298,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 			$.when(conceptPromise).done(function () {
 				self.currentView('concept');
 			});
-		}
+		};
 		self.metagorize = function (metarchy, related) {
 			var concept = self.currentConcept();
 			var key = concept.VOCABULARY_ID + '.' + concept.CONCEPT_CLASS_ID;
@@ -239,7 +311,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 					metarchy.parents.push(related);
 				}
 			}
-		}
+		};
 		self.searchConceptsOptions = {
 			Facets: [{
 				'caption': 'Vocabulary',
@@ -782,6 +854,26 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 			});
 			return resolvingPromise;
 		};
+		self.resolveConceptSetExpressionSimple = function(expression, success) {
+			var resolvingPromise = $.ajax({
+				url: self.vocabularyUrl() + 'resolveConceptSetExpression',
+				data: expression,
+				method: 'POST',
+				contentType: 'application/json',
+				success: success || function (info) {
+					var identifiers = info;
+					self.conceptSetInclusionIdentifiers(info);
+					self.currentIncludedConceptIdentifierList(info.join(','));
+					self.conceptSetInclusionCount(info.length);
+					self.resolvingConceptSetExpression(false);
+				},
+				error: function (err) {
+					self.currentView('configure');
+					self.resolvingConceptSetExpression(false);
+				}
+			});
+			return resolvingPromise;
+		};
 		self.renderCheckbox = function (field) {
 			return '<span data-bind="click: function(d) { d.' + field + '(!d.' + field + '()); pageModel.resolveConceptSetExpression(); } ,css: { selected: ' + field + '} " class="fa fa-check"></span>';
 		}
@@ -816,7 +908,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 			reportKey: 'Condition Eras',
 			analyses: [1001, 1000, 1007, 1006, 1004, 1002, 116, 117, 1]
         }, {
-			name: "Conditions By Index",
+			name: "Conditions by Index",
 			reportKey: 'Conditions by Index',
 			analyses: [1700, 1800, 1801, 1802, 1803, 1804, 1805, 1806, 1807, 1808, 1809, 1810, 1811, 1812, 1813, 1814, 1815, 1816, 1820, 1821, 1830, 1831, 1840, 1841, 1850, 1851, 1860, 1861, 1870, 1871, 116, 117, 1]
         }, {
@@ -965,7 +1057,6 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 			});
 		}
 		self.loadCohortDefinition = function (cohortDefinitionId, conceptSetId, viewToShow, mode) {
-			self.currentView('loading');
 			// don't load if it is already loaded or a new concept set
 			if (self.currentCohortDefinition() && self.currentCohortDefinition().id() == cohortDefinitionId) {
 				if (self.currentConceptSet() && self.currentConceptSet().id == conceptSetId && self.currentConceptSetSource() == 'cohort') {
@@ -994,6 +1085,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 				// If we continue, then clear the loaded concept set
 				self.clearConceptSet();
 			}
+			self.currentView('loading');
 			var definitionPromise, infoPromise;
 			requirejs(['cohortbuilder/CohortDefinition'], function (CohortDefinition) {
 				if (cohortDefinitionId == '0') {
@@ -1246,6 +1338,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 				}
 			});
 		}
+		
 		self.loadCohortConceptSet = function (conceptSetId, viewToShow, mode) {
 			// Load up the selected concept set from the cohort definition
 			var conceptSet = self.currentCohortDefinition().expression().ConceptSets().filter(function (item) {
@@ -1371,8 +1464,28 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 		self.conceptSetInclusionIdentifiers = ko.observableArray();
 		self.currentConceptSetExpressionJson = ko.observable();
 		self.currentConceptIdentifierList = ko.observable();
+		
 		self.currentConceptSet = ko.observable();
+		self.currentConceptSetDirtyFlag = new ohdsiUtil.dirtyFlag({
+			header: self.currentConceptSet,
+			details: self.selectedConcepts
+		});
+		self.conceptSetCss = ko.pureComputed(function() {
+			if (self.currentConceptSet())
+				return self.currentConceptSetDirtyFlag.isDirty() ? "unsaved" : "open";
+		});
+		self.conceptSetURL = ko.pureComputed(function() {
+			var url = "#/";
+			if (self.currentConceptSet())
+				url = url + "conceptset/" + (self.currentConceptSet().id || '0') + '/details';
+			else
+				url = url + "conceptsets";
+			return url;
+		});
+
+		
 		self.currentConceptSetSource = ko.observable('repository');
+    self.currentConceptSetNegativeControls = ko.observable();
 		self.currentIncludedConceptIdentifierList = ko.observable();
 		self.searchResultsConcepts = ko.observableArray();
 		self.relatedConcepts = ko.observableArray();
@@ -1382,11 +1495,45 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 		self.denseSiblings = ko.observableArray();
 		self.includedSourcecodes = ko.observableArray();
 		self.cohortDefinitions = ko.observableArray();
+		
 		self.currentCohortDefinition = ko.observable();
+		self.cohortDefCss = ko.pureComputed(function() {
+			if (self.currentCohortDefinition())
+				return self.currentCohortDefinitionDirtyFlag().isDirty() ? "unsaved" : "open";
+		});
+		self.cohortDefURL = ko.pureComputed(function() {
+			var url = "#/";
+			if (self.currentCohortDefinition())
+				url = url + "cohortdefinition/" + (self.currentCohortDefinition().id() || '0');
+			else
+				url = url + "cohortdefinitions"
+			return url;
+		});
+		
+		
 		self.currentCohortComparisonId = ko.observable();
+		self.currentCohortComparison = ko.observable();
+		self.currentCohortComparisonDirtyFlag = ko.observable(new ohdsiUtil.dirtyFlag(self.currentCohortComparison()));
+		self.ccaCss = ko.pureComputed(function() {
+			if (self.currentCohortComparison())
+				return self.currentCohortComparisonDirtyFlag().isDirty() ? "unsaved" : "open";
+		});
+		self.ccaURL = ko.pureComputed(function() {
+			var url = "#/estimation";
+			if (self.currentCohortComparison())
+				url = url + "/" + (self.currentCohortComparison().analysisId || 0);
+			return url;
+		});
+		
+		
 		self.currentCohortDefinitionInfo = ko.observable();
 		self.currentCohortDefinitionDirtyFlag = ko.observable(self.currentCohortDefinition() && new ohdsiUtil.dirtyFlag(self.currentCohortDefinition()));
 		self.feasibilityId = ko.observable();
+		
+		self.selectedIRAnalysisId = ko.observable();
+		self.currentIRAnalysis = ko.observable();
+		self.currentIRAnalysisDirtyFlag = ko.observable(new ohdsiUtil.dirtyFlag(self.currentIRAnalysis()));
+
 		self.resolvingConceptSetExpression = ko.observable();
 		self.resolvingSourcecodes = ko.observable();
 		self.evidence = ko.observableArray();
@@ -1397,6 +1544,23 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 		self.currentConcept = ko.observable();
 		self.currentConceptId = ko.observable();
 		self.currentConceptMode = ko.observable('details');
+    self.currentIRAnalysisId = ko.observable();
+
+		self.irStatusCss = ko.pureComputed(function() {
+			if (self.currentIRAnalysis())
+				return self.currentIRAnalysisDirtyFlag().isDirty() ? "unsaved" : "open";
+		});
+		self.irAnalysisURL = ko.pureComputed(function() {
+			var url = "#/iranalysis";
+			if (self.currentIRAnalysis())
+				url = url + "/" + (self.currentIRAnalysis().id() || 'new');
+			return url;
+		});
+
+		self.irStatusCss = ko.pureComputed(function() {
+			if (self.currentIRAnalysis())
+				return self.currentIRAnalysisDirtyFlag().isDirty() ? "unsaved" : "open";
+		});
 		self.renderCurrentConceptSelector = function () {
 			var css = '';
 			if (self.selectedConceptsIndex[self.currentConcept().CONCEPT_ID] == 1) {
@@ -1413,6 +1577,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 			return '<i class="fa ' + icon + ' ' + css + '"></i>';
 		}
 		self.currentConceptSetMode = ko.observable('details');
+		//ohdsiUtil.setState('cohortDefTab', 'definition');
 		self.currentCohortDefinitionMode = ko.observable('definition');
 		self.currentImportMode = ko.observable('identifiers');
 		self.feRelated = ko.observable();
@@ -1421,10 +1586,7 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 		self.selectedConcepts = ko.observableArray(null);
 		//.extend({ persist: 'atlas.selectedConcepts' });
 		self.selectedConceptsWarnings = ko.observableArray();
-		self.currentConceptSetDirtyFlag = new ohdsiUtil.dirtyFlag({
-			header: self.currentConceptSet,
-			details: self.selectedConcepts
-		});
+
 		self.checkCurrentSource = function (source) {
 			return source.url == self.curentVocabularyUrl();
 		};
@@ -1530,6 +1692,12 @@ define(['jquery', 'knockout', 'jnj_chart', 'd3', 'ohdsi.util', 'appConfig', 'fac
 			if (newValue != null) {
 				self.currentCohortDefinitionDirtyFlag(new ohdsiUtil.dirtyFlag(self.currentCohortDefinition()));
 			}
+		});
+		self.hasUnsavedChanges = ko.pureComputed(function() {
+			return ((pageModel.currentCohortDefinitionDirtyFlag() && pageModel.currentCohortDefinitionDirtyFlag().isDirty())  || 
+					(pageModel.currentConceptSetDirtyFlag && pageModel.currentConceptSetDirtyFlag.isDirty()) ||
+				 	pageModel.currentIRAnalysisDirtyFlag().isDirty() ||
+				 	pageModel.currentCohortComparisonDirtyFlag().isDirty());
 		});
 	}
 	return appModel;

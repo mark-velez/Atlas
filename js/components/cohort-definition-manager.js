@@ -5,11 +5,13 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 				'ohdsi.util',
         'cohortbuilder/CohortExpression',
 				'cohortbuilder/InclusionRule',
+				'conceptsetbuilder/InputTypes/ConceptSet',
 				'cohortbuilder/components/FeasibilityReportViewer',
 				'knockout.dataTables.binding',
 				'faceted-datatable',
-				'databindings'
-], function (ko, view, config, CohortDefinition, cohortDefinitionAPI, ohdsiUtil, CohortExpression, InclusionRule) {
+				'databindings', 
+				'cohortdefinitionviewer/expressionCartoonBinding',
+], function (ko, view, config, CohortDefinition, cohortDefinitionAPI, util, CohortExpression, InclusionRule, ConceptSet) {
 
 	function translateSql(sql, dialect) {
 		translatePromise = $.ajax({
@@ -54,7 +56,6 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 		self.generatedSql.postgresql = ko.observable('');
 		self.generatedSql.redshift = ko.observable('');
 		self.generatedSql.msaps = ko.observable('');
-
 		self.tabMode = self.model.currentCohortDefinitionMode;
 		self.exportTabMode = ko.observable('printfriendly');
 		self.exportSqlMode = ko.observable('mssql');
@@ -64,6 +65,20 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 		self.isSaveable = ko.pureComputed(function () {
 			return self.dirtyFlag() && self.dirtyFlag().isDirty();
 		});
+		self.tabPath = ko.computed(function() {
+			var path = self.tabMode();
+			if (path === 'export') {
+				path += '/' + self.exportTabMode();
+			}
+			//console.log('tabPath:', path);
+			if (self.exportTabMode() === 'cartoon') {
+				setTimeout(function() {
+					self.delayedCartoonUpdate('ready');
+				}, 10);
+			}
+			return path;
+		});
+		self.delayedCartoonUpdate = ko.observable(null);
 
 		self.canGenerate = ko.pureComputed(function () {
 			var isDirty = self.dirtyFlag() && self.dirtyFlag().isDirty();
@@ -89,7 +104,6 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 			}
 		});
 
-		self.selectedFragment = ko.observable();
 		self.selectedReport = ko.observable();
 		self.selectedReportCaption = ko.observable();
 		self.loadingInclusionReport = ko.observable(false);
@@ -158,7 +172,8 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 
 		self.save = function () {
 			clearTimeout(pollTimeout);
-
+			self.model.clearConceptSet();
+			
 			// If we are saving a new cohort definition (id ==0) then clear
 			// the id field before saving
 			if (self.model.currentCohortDefinition().id() == 0) {
@@ -375,6 +390,18 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 			);
 			self.closeConceptSet();
 		}
+		
+		self.newConceptSet = function() {
+			console.log("new concept set selected");
+			var newConceptSet = new ConceptSet();
+			var cohortConceptSets = self.model.currentCohortDefinition().expression().ConceptSets;
+			newConceptSet.id = cohortConceptSets().length > 0 ? Math.max.apply(null, cohortConceptSets().map(function (d) {
+			 return d.id;
+			})) + 1 : 0;
+			cohortConceptSets.push(newConceptSet);
+			self.model.loadConceptSet(newConceptSet.id, 'cohortdefinition', 'cohort', 'details');
+			self.model.currentCohortDefinitionMode("conceptsets");
+		}
 
 		self.viewReport = function (sourceKey, reportName) {
 			// TODO: Should we prevent running an analysis on an unsaved cohort definition?
@@ -412,7 +439,39 @@ define(['knockout', 'text!./cohort-definition-manager.html',
 		self.dispose = function () {
 			//self.currentCohortDefinitionSubscription.dispose();
 		}
-
+		self.getCriteriaIndexComponent = function (data) {
+			data = ko.utils.unwrapObservable(data);
+			if (!data) return;
+			if (data.hasOwnProperty("ConditionOccurrence"))
+				return "condition-occurrence-criteria-viewer";
+			else if (data.hasOwnProperty("ConditionEra"))
+				return "condition-era-criteria-viewer";
+			else if (data.hasOwnProperty("DrugExposure"))
+				return "drug-exposure-criteria-viewer";
+			else if (data.hasOwnProperty("DrugEra"))
+				return "drug-era-criteria-viewer";
+			else if (data.hasOwnProperty("DoseEra"))
+				return "dose-era-criteria-viewer";
+			else if (data.hasOwnProperty("ProcedureOccurrence"))
+				return "procedure-occurrence-criteria-viewer";
+			else if (data.hasOwnProperty("Observation"))
+				return "observation-criteria-viewer";			
+			else if (data.hasOwnProperty("VisitOccurrence"))
+				return "visit-occurrence-criteria-viewer";			
+			else if (data.hasOwnProperty("DeviceExposure"))
+				return "device-exposure-criteria-viewer";			
+			else if (data.hasOwnProperty("Measurement"))
+				return "measurement-criteria-viewer";
+			else if (data.hasOwnProperty("Specimen"))
+				return "specimen-criteria-viewer";
+			else if (data.hasOwnProperty("ObservationPeriod"))
+				return "observation-period-criteria-viewer";			
+			else if (data.hasOwnProperty("Death"))
+				return "death-criteria-viewer";			
+			else
+				return "unknownCriteriaType";
+		};
+		self.selectedCriteria = ko.observable();
 	}
 
 	var component = {
